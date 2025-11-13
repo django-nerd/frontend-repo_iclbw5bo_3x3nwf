@@ -84,6 +84,117 @@ function ConfettiBurst({ show, onDone }) {
   )
 }
 
+function ChatWidget({ userId, topic, dark }) {
+  const [open, setOpen] = useState(false)
+  const [messages, setMessages] = useState([])
+  const [input, setInput] = useState('')
+  const [sending, setSending] = useState(false)
+  const [err, setErr] = useState('')
+
+  const sendMessage = async () => {
+    if (!input.trim() || sending) return
+    setErr('')
+    const userTurn = { role: 'user', message: input }
+    setMessages((m) => [...m, userTurn])
+    setInput('')
+    setSending(true)
+    try {
+      const res = await fetch(`${BACKEND}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: userId, message: userTurn.message, topic }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.detail || 'Failed to get reply')
+      const assistantTurn = { role: 'assistant', message: data.reply }
+      setMessages((m) => [...m, assistantTurn])
+    } catch (e) {
+      setErr(e.message)
+    } finally {
+      setSending(false)
+    }
+  }
+
+  const containerClass = cx(
+    'fixed bottom-4 right-4 z-40',
+  )
+
+  return (
+    <div className={containerClass}>
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            key="panel"
+            initial={{ opacity: 0, y: 16, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 16, scale: 0.98 }}
+            transition={{ duration: 0.2 }}
+            className={cx('w-[92vw] sm:w-96 rounded-xl shadow-lg border overflow-hidden backdrop-blur', dark ? 'bg-slate-900/90 border-white/10' : 'bg-white/95 border-gray-200')}
+          >
+            <div className={cx('px-4 py-3 border-b flex items-center justify-between', dark ? 'border-white/10' : 'border-gray-200')}>
+              <div className="flex items-center gap-2">
+                <div className={cx('h-6 w-6 rounded-md grid place-items-center', dark ? 'bg-indigo-500/20 text-indigo-200' : 'bg-indigo-600/10 text-indigo-700')}>
+                  <Sparkles size={14} />
+                </div>
+                <div className="text-sm font-semibold">Ask a doubt</div>
+              </div>
+              <button onClick={() => setOpen(false)} className={cx('text-xs px-2 py-1 rounded border', dark ? 'border-white/10 hover:bg-white/5' : 'border-gray-200 hover:bg-gray-50')}>Close</button>
+            </div>
+
+            <div className={cx('max-h-80 overflow-y-auto p-3 space-y-2 text-sm', dark ? 'text-slate-100' : 'text-gray-800')}>
+              {messages.length === 0 && (
+                <div className={cx('text-xs', dark ? 'text-slate-400' : 'text-gray-500')}>Tips: Ask about arrays, graphs, DP, complexity… Off-topic questions get a gentle reminder.</div>
+              )}
+              {messages.map((m, idx) => (
+                <div key={idx} className={cx('flex', m.role === 'user' ? 'justify-end' : 'justify-start')}>
+                  <div className={cx('px-3 py-2 rounded-lg border max-w-[80%]',
+                    m.role === 'user'
+                      ? (dark ? 'bg-indigo-500/20 border-indigo-500/30' : 'bg-indigo-50 border-indigo-200')
+                      : (dark ? 'bg-white/5 border-white/10' : 'bg-white border-gray-200')
+                  )}>{m.message}</div>
+                </div>
+              ))}
+              {err && (
+                <div className={cx('text-xs', dark ? 'text-red-300' : 'text-red-600')}>{err}</div>
+              )}
+            </div>
+
+            <div className={cx('p-3 border-t flex items-center gap-2', dark ? 'border-white/10' : 'border-gray-200')}>
+              <input
+                value={input}
+                onChange={(e)=>setInput(e.target.value)}
+                onKeyDown={(e)=>{ if(e.key==='Enter') sendMessage() }}
+                placeholder={`Ask about ${topic || 'DSA'}…`}
+                className={cx('flex-1 rounded-md px-3 py-2 text-sm border focus:outline-none focus:ring-2', dark ? 'bg-slate-800/80 border-white/10 text-slate-100 focus:ring-indigo-500' : 'bg-white border-gray-300 focus:ring-indigo-500')}
+              />
+              <motion.button
+                whileHover={{ y: -1 }}
+                whileTap={{ scale: 0.98 }}
+                disabled={sending}
+                onClick={sendMessage}
+                className={cx('px-3 py-2 rounded-md text-sm shadow-sm', sending ? (dark ? 'bg-slate-700 text-slate-300' : 'bg-gray-200 text-gray-500') : (dark ? 'bg-indigo-500 text-white hover:bg-indigo-500/90' : 'bg-indigo-600 text-white hover:bg-indigo-700'))}
+              >
+                {sending ? 'Sending…' : 'Send'}
+              </motion.button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <motion.button
+        whileHover={{ y: -2 }}
+        whileTap={{ scale: 0.98 }}
+        onClick={() => setOpen(v => !v)}
+        aria-label="Open chat"
+        className={cx('rounded-full shadow-lg border p-3 flex items-center gap-2', dark ? 'bg-indigo-500 text-white border-indigo-400/40 hover:bg-indigo-500/90' : 'bg-indigo-600 text-white border-indigo-500 hover:bg-indigo-700')}
+      >
+        <Sparkles size={18} />
+        <span className="hidden sm:inline text-sm font-medium">Chat</span>
+      </motion.button>
+    </div>
+  )
+}
+
 function App() {
   const [userId, setUserId] = useState('student@example.com')
   const [lang, setLang] = useState('python')
@@ -422,6 +533,9 @@ function App() {
           <ConfettiBurst show={confetti} onDone={() => setConfetti(false)} />
         )}
       </AnimatePresence>
+
+      {/* Floating Chat Widget */}
+      <ChatWidget userId={userId} topic={selectedTopic} dark={dark} />
 
       <style>{`
         @keyframes shimmer { 100% { transform: translateX(100%); } }
